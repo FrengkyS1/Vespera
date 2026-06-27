@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+dist/
+
+# Rust / Tauri build output
+src-tauri/target/
+
+# Bundled mpv binary (large; user supplies, see README)
+src-tauri/bin/
+
+# libmpv (118MB DLL + generated import lib; see README to regenerate)
+src-tauri/libmpv/*.dll
+src-tauri/libmpv/*.lib
+src-tauri/libmpv/*.exp
+
+# Editor / OS / tooling
+.vs/
+.idea/
+*.user
+Thumbs.db
+.DS_Store
+.impeccable/
