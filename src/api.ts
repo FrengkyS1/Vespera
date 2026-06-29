@@ -85,6 +85,7 @@ export const mpvSetDouble = (name: string, value: number) =>
 export const mpvStop = () => invoke("mpv_stop");
 export const togglePause = () => mpvCommand(["cycle", "pause"]);
 export const cursorPos = () => invoke<[number, number]>("cursor_pos");
+export const appForeground = () => invoke<boolean>("app_foreground");
 
 export interface MpvEvent {
   event: string;

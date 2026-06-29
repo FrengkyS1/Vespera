@@ -114,6 +114,13 @@ fn cursor_pos() -> (i32, i32) {
     mpv::cursor_pos()
 }
 
+/// Whether Vespera (any of its windows) is the foreground app. Gates the
+/// floating control bar without hiding it when the player itself has focus.
+#[tauri::command]
+fn app_foreground() -> bool {
+    mpv::app_is_foreground()
+}
+
 /// AniList metadata (cover/banner/title) for a folder, cached on disk.
 #[tauri::command]
 async fn anime_metadata(path: String, title: String, force: bool) -> Option<anilist::AnimeMeta> {
@@ -145,6 +152,7 @@ pub fn run() {
             mpv_set_double,
             mpv_stop,
             cursor_pos,
+            app_foreground,
             anime_metadata,
         ])
         .setup(|app| {

@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ArrowLeft, Minus, Square, X } from "lucide-react";
+import { VesperaMark } from "./Logo";
 
 interface Props {
   playingTitle?: string | null;
@@ -22,7 +23,7 @@ export function TitleBar({ playingTitle, onClosePlayer }: Props) {
         </div>
       ) : (
         <div className="titlebar-drag" data-tauri-drag-region>
-          <span className="brand-dot" />
+          <VesperaMark size={18} />
           <span className="brand">Vespera</span>
         </div>
       )}

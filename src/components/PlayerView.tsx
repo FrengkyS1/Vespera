@@ -5,6 +5,7 @@ import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
 import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
 import { listen } from "@tauri-apps/api/event";
 import {
+  appForeground,
   cursorPos,
   mpvCommand,
   mpvLoad,
@@ -119,16 +120,16 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
         try {
           // Only float the bar when Vespera itself is focused/visible, so it
           // never sits on top of other apps.
-          const [op, os, scale, cur, focused, minimized] = await Promise.all([
+          const [op, os, scale, cur, foreground, minimized] = await Promise.all([
             main.outerPosition(),
             main.outerSize(),
             main.scaleFactor(),
             cursorPos(),
-            main.isFocused(),
+            appForeground(),
             main.isMinimized(),
           ]);
 
-          if (!focused || minimized) {
+          if (!foreground || minimized) {
             if (shown) {
               shown = false;
               await bar.hide();
@@ -172,6 +173,11 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
 
     const save = window.setInterval(saveNow, 5000);
     window.addEventListener("resize", onResize);
+
+    // Keep the native video window exactly matched to the stage — covers the
+    // initial layout settle and any size change, so no black gap appears.
+    const ro = new ResizeObserver(() => onResize());
+    if (stageRef.current) ro.observe(stageRef.current);
 
     const onKey = async (e: KeyboardEvent) => {
       switch (e.key) {
@@ -224,6 +230,7 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
     return () => {
       window.clearInterval(save);
       if (poll) window.clearInterval(poll);
+      ro.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
       unNav.forEach((u) => u());
@@ -248,6 +255,8 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
           startedRef.current = true;
         }
         await mpvLoad(video.path, resume?.position ?? 0);
+        // Re-place once the layout has fully settled (avoids an initial black gap).
+        requestAnimationFrame(() => mpvResize(stageRect(stageRef.current)));
       } catch {
         /* ignore */
       }

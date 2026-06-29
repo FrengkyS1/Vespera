@@ -120,6 +120,8 @@ extern "system" {
     fn GetModuleHandleW(name: *const u16) -> isize;
     fn GetStockObject(obj: c_int) -> isize;
     fn GetCursorPos(p: *mut POINT) -> c_int;
+    fn GetForegroundWindow() -> isize;
+    fn GetWindowThreadProcessId(hwnd: isize, pid: *mut u32) -> u32;
 }
 
 #[repr(C)]
@@ -135,6 +137,22 @@ pub fn cursor_pos() -> (i32, i32) {
         GetCursorPos(&mut p);
     }
     (p.x, p.y)
+}
+
+/// True when the foreground window belongs to this process — i.e. the user is in
+/// Vespera (its main window, the video child, or the floating control bar) rather
+/// than another app. Used to gate the control bar so it never floats over other
+/// apps, while still showing when the player itself has focus.
+pub fn app_is_foreground() -> bool {
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg == 0 {
+            return false;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(fg, &mut pid);
+        pid == std::process::id()
+    }
 }
 
 fn wide(s: &str) -> Vec<u16> {

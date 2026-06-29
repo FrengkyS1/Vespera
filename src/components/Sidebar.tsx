@@ -1,5 +1,6 @@
 import { Clapperboard, Folder as FolderIcon, Plus, Settings } from "lucide-react";
 import type { Folder } from "../api";
+import { VesperaMark } from "./Logo";
 
 export type Selection =
   | { kind: "all" }
@@ -21,9 +22,7 @@ export function Sidebar({ folders, totalVideos, selection, onSelect, onAddFolder
   return (
     <aside className="sidebar">
       <div className="side-brand">
-        <span className="mark">
-          <Clapperboard size={17} />
-        </span>
+        <VesperaMark className="mark" size={30} />
         <span className="name">Vespera</span>
       </div>
 
