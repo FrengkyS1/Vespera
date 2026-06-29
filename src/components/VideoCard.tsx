@@ -27,7 +27,7 @@ export function VideoCard({ video, progress, onPlay }: Props) {
       : 0;
 
   return (
-    <div className="card" onClick={() => onPlay(video)} title={video.title}>
+    <button type="button" className="card" onClick={() => onPlay(video)} title={video.title} aria-label={`Play ${video.title}`}>
       <div className="thumb">
         {thumb ? <img src={thumb} alt="" loading="lazy" /> : <Film className="ph" size={36} />}
       </div>
@@ -47,7 +47,7 @@ export function VideoCard({ video, progress, onPlay }: Props) {
           <span style={{ width: `${pct}%` }} />
         </div>
       )}
-    </div>
+    </button>
   );
 }
 

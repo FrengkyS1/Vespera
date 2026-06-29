@@ -11,7 +11,7 @@ interface Props {
 export function AnimePoster({ folder, meta, inProgress, onClick }: Props) {
   const title = meta?.title ?? folder.name;
   return (
-    <div className="poster" onClick={onClick} title={title}>
+    <button type="button" className="poster" onClick={onClick} title={title} aria-label={`Open ${title}`}>
       <div className="poster-img">
         {meta?.cover ? (
           <img src={meta.cover} alt="" loading="lazy" />
@@ -33,6 +33,6 @@ export function AnimePoster({ folder, meta, inProgress, onClick }: Props) {
         {meta?.format ?? "Local"}
         {meta?.year ? ` · ${meta.year}` : ""}
       </div>
-    </div>
+    </button>
   );
 }
