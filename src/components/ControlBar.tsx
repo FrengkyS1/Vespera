@@ -9,18 +9,19 @@ import {
   SkipForward,
   Volume2,
 } from "lucide-react";
-import { emit } from "@tauri-apps/api/event";
-import {
-  mpvCommand,
-  mpvSetDouble,
-  onMpvEvent,
-} from "../api";
+import { mpvCommand, mpvSetDouble, onMpvEvent } from "../api";
 
-// Renders in the separate always-on-top "controls" window that floats over the
-// bottom of the video. It shares the mpv backend, so it drives playback directly
-// and reflects state from mpv events. Library navigation (back/next/prev) is
-// emitted to the main window.
-export function ControlBar() {
+interface Props {
+  title: string;
+  onBack: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+}
+
+// In-window control bar that sits directly below the video. It shares the mpv
+// backend, so it drives playback and reflects state from mpv events; library
+// navigation is handled by callbacks from the player.
+export function ControlBar({ title, onBack, onNext, onPrev }: Props) {
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -48,18 +49,19 @@ export function ControlBar() {
   const pct = dur > 0 ? (pos / dur) * 100 : 0;
 
   return (
-    <div className="cbar">
+    <div className="player-bar">
       <div className="bar-top">
-        <button className="ctrl-btn" onClick={() => emit("vespera://back")} title="Back to library (Esc)">
-          <ArrowLeft size={20} />
+        <button className="ctrl-btn sm" onClick={onBack} title="Back to library (Esc)">
+          <ArrowLeft size={18} />
         </button>
+        <span className="bar-title">{title}</span>
       </div>
       <div className="seek" onClick={seekTo}>
         <div className="fill" style={{ width: `${pct}%` }} />
         <div className="knob" style={{ left: `${pct}%` }} />
       </div>
       <div className="ctrl-row">
-        <button className="ctrl-btn" onClick={() => emit("vespera://prev")} title="Previous (P)">
+        <button className="ctrl-btn" onClick={onPrev} title="Previous (P)">
           <SkipBack size={20} />
         </button>
         <button className="ctrl-btn" onClick={() => mpvCommand(["seek", "-10", "relative"])} title="-10s (Z)">
@@ -71,7 +73,7 @@ export function ControlBar() {
         <button className="ctrl-btn" onClick={() => mpvCommand(["seek", "10", "relative"])} title="+10s (X)">
           <FastForward size={20} />
         </button>
-        <button className="ctrl-btn" onClick={() => emit("vespera://next")} title="Next (N)">
+        <button className="ctrl-btn" onClick={onNext} title="Next (N)">
           <SkipForward size={20} />
         </button>
         <span className="time">

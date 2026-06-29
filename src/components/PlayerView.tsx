@@ -1,12 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
-import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
-import { listen } from "@tauri-apps/api/event";
 import {
-  appForeground,
-  cursorPos,
   mpvCommand,
   mpvLoad,
   mpvResize,
@@ -19,17 +13,19 @@ import {
   type Rect,
   type VideoFile,
 } from "../api";
+import { ControlBar } from "./ControlBar";
 
-const BAR_H = 112; // logical px height of the floating control bar
-
+// Physical-pixel rect of the video stage. Floor the origin and ceil the size so
+// the native video window fully covers the stage (no thin black edge from
+// sub-pixel DPI rounding).
 function stageRect(el: HTMLElement | null): Rect {
   const r = el?.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   return {
-    x: Math.round((r?.left ?? 0) * dpr),
-    y: Math.round((r?.top ?? 0) * dpr),
-    w: Math.round((r?.width ?? 0) * dpr),
-    h: Math.round((r?.height ?? 0) * dpr),
+    x: Math.floor((r?.left ?? 0) * dpr),
+    y: Math.floor((r?.top ?? 0) * dpr),
+    w: Math.ceil((r?.width ?? 0) * dpr),
+    h: Math.ceil((r?.height ?? 0) * dpr),
   };
 }
 
@@ -58,16 +54,23 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
     }
   };
 
-  // ── Player lifecycle: mpv events, keyboard, control window ──
+  // Nav helpers that persist progress before leaving the current file.
+  const handleBack = () => {
+    saveNow();
+    cb.current.onClose();
+  };
+  const handleNext = () => {
+    saveNow();
+    cb.current.onNext();
+  };
+  const handlePrev = () => {
+    saveNow();
+    cb.current.onPrev();
+  };
+
+  // ── Player lifecycle: mpv events, keyboard, progress, sizing ──
   useEffect(() => {
     let unlisten: (() => void) | undefined;
-    let unNav: Array<() => void> = [];
-    let poll: number | undefined;
-    let bar: WebviewWindow | null = null;
-    let shown = false;
-    let lastSeen = Date.now();
-    let lastBounds = "";
-
     const onResize = () => mpvResize(stageRect(stageRef.current));
 
     (async () => {
@@ -83,103 +86,16 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
         if (e.name === "time-pos" && typeof e.data === "number") posRef.current = e.data;
         else if (e.name === "duration" && typeof e.data === "number") durRef.current = e.data;
       });
-
-      // Nav actions emitted by the control bar window.
-      unNav.push(await listen("vespera://back", () => cb.current.onClose()));
-      unNav.push(await listen("vespera://next", () => {
-        saveNow();
-        cb.current.onNext();
-      }));
-      unNav.push(await listen("vespera://prev", () => {
-        saveNow();
-        cb.current.onPrev();
-      }));
-
-      // Create (or reuse) the floating control bar window.
-      const existing = (await getAllWebviewWindows()).find((w) => w.label === "controls");
-      bar =
-        existing ??
-        new WebviewWindow("controls", {
-          url: "index.html?view=controls",
-          decorations: false,
-          alwaysOnTop: true,
-          skipTaskbar: true,
-          focus: false,
-          shadow: false,
-          resizable: false,
-          visible: false,
-          width: 900,
-          height: BAR_H,
-          title: "controls",
-        });
-
-      // Position + auto-hide loop, driven by the global cursor position.
-      const main = getCurrentWindow();
-      poll = window.setInterval(async () => {
-        if (!bar) return;
-        try {
-          // Only float the bar when Vespera itself is focused/visible, so it
-          // never sits on top of other apps.
-          const [op, os, scale, cur, foreground, minimized] = await Promise.all([
-            main.outerPosition(),
-            main.outerSize(),
-            main.scaleFactor(),
-            cursorPos(),
-            appForeground(),
-            main.isMinimized(),
-          ]);
-
-          if (!foreground || minimized) {
-            if (shown) {
-              shown = false;
-              await bar.hide();
-            }
-            return;
-          }
-
-          const barPx = Math.round(BAR_H * scale);
-          const x = op.x;
-          const y = op.y + os.height - barPx;
-
-          const bounds = `${x},${y},${os.width},${barPx}`;
-          if (bounds !== lastBounds) {
-            lastBounds = bounds;
-            await bar.setPosition(new PhysicalPosition(x, y));
-            await bar.setSize(new PhysicalSize(os.width, barPx));
-          }
-
-          const [cx, cy] = cur;
-          const triggerTop = y - Math.round(70 * scale);
-          const inZone =
-            cx >= op.x &&
-            cx <= op.x + os.width &&
-            cy >= triggerTop &&
-            cy <= op.y + os.height;
-          const now = Date.now();
-          if (inZone) lastSeen = now;
-          const wantShown = now - lastSeen < 800;
-          if (wantShown && !shown) {
-            shown = true;
-            await bar.show();
-          } else if (!wantShown && shown) {
-            shown = false;
-            await bar.hide();
-          }
-        } catch {
-          /* window may be closing */
-        }
-      }, 120);
     })();
 
     const save = window.setInterval(saveNow, 5000);
     window.addEventListener("resize", onResize);
 
-    // Keep the native video window exactly matched to the stage — covers the
-    // initial layout settle and any size change, so no black gap appears.
+    // Keep the native video window matched to the stage through any size change.
     const ro = new ResizeObserver(() => onResize());
     if (stageRef.current) ro.observe(stageRef.current);
 
-    const onKey = async (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       switch (e.key) {
         case " ":
           e.preventDefault();
@@ -211,17 +127,14 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
           break;
         case "n":
         case "N":
-          saveNow();
-          cb.current.onNext();
+          handleNext();
           break;
         case "p":
         case "P":
-          saveNow();
-          cb.current.onPrev();
+          handlePrev();
           break;
         case "Escape":
-          saveNow();
-          cb.current.onClose();
+          handleBack();
           break;
       }
     };
@@ -229,14 +142,11 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
 
     return () => {
       window.clearInterval(save);
-      if (poll) window.clearInterval(poll);
-      ro.disconnect();
       window.removeEventListener("resize", onResize);
+      ro.disconnect();
       window.removeEventListener("keydown", onKey);
-      unNav.forEach((u) => u());
       saveNow();
       if (unlisten) unlisten();
-      if (bar) bar.close().catch(() => {});
       mpvStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,7 +165,7 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
           startedRef.current = true;
         }
         await mpvLoad(video.path, resume?.position ?? 0);
-        // Re-place once the layout has fully settled (avoids an initial black gap).
+        // Re-place once layout has settled, so the video fills the stage exactly.
         requestAnimationFrame(() => mpvResize(stageRect(stageRef.current)));
       } catch {
         /* ignore */
@@ -270,9 +180,9 @@ export function PlayerView({ video, resume, defaultVolume, onClose, onNext, onPr
         <div className="player-loading">
           <Loader2 className="spin" size={26} />
           <span>{video.title}</span>
-          <span className="player-hint">Move the mouse to the bottom for controls · Esc to go back</span>
         </div>
       </div>
+      <ControlBar title={video.title} onBack={handleBack} onNext={handleNext} onPrev={handlePrev} />
     </div>
   );
 }

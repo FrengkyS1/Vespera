@@ -967,6 +967,10 @@ button {
 .ctrl-btn:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+.ctrl-btn.sm {
+  width: 34px;
+  height: 34px;
+}
 .ctrl-btn.play {
   background: var(--accent-grad);
   color: #ffffff;
