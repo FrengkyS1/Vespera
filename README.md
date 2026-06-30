@@ -1,61 +1,98 @@
-# Vespera
+<div align="center">
 
-A lightweight desktop video player — **Tauri (Rust + React)** with **embedded libmpv**
-for true in-window playback (the same model as seanime's built-in "Denshi" player).
-Browse a local library with thumbnails and resume, play in-window with mpv's engine.
-Warm "evening star" twilight theme.
+# ✦ Vespera
 
-> Successor to the native C++/Win32 LuminaPlayer. Same playback fidelity (libmpv),
-> a modern declarative UI, and the player engine bundled in — no separate mpv install.
+**A desktop anime & video player — Tauri (Rust + React) with libmpv embedded via FFI.**
 
-## How it works
+Browse a local library with AniList cover art, resume where you left off, and play
+in-window on mpv's engine — wrapped in a frosted "Aurora Glass" UI.
 
-- **Frontend** — React 19 + Vite + TypeScript, plain CSS theme.
-- **Backend** — Rust (Tauri v2): library scan, config + resume persistence, thumbnails.
-- **Playback** — **libmpv via FFI** (bundled engine, no separate mpv install).
-  Hand-written C bindings drive libmpv, which renders in its own window with mpv's
-  on-screen controller and key bindings. Property changes (`time-pos`, `duration`,
-  `pause`) stream back to the UI as events for resume tracking and the now-playing
-  bar. (Compositing video *inside* the WebView2 surface via `wid` didn't render
-  reliably, so libmpv manages its own video window — see Status.)
+</div>
 
-## libmpv setup (one-time, for building)
+## 📸 Screenshots
 
-The build links against libmpv and ships `libmpv-2.dll` next to the executable.
-These binaries are gitignored (118 MB); to set up a fresh checkout, place them in
-`src-tauri/libmpv/`:
+> _Add captures here_ — drop images in `docs/` and they'll render below.
 
-1. Get `libmpv-2.dll` + headers from an mpv dev build (or scoop's mpv).
-2. Generate the MSVC import lib from the DLL:
+<!--
+![Library](docs/library.png)
+![Player](docs/player.png)
+-->
+
+| Library (poster grid) | In-window player |
+| --- | --- |
+| _docs/library.png_ | _docs/player.png_ |
+
+## ✨ Features
+
+- **Local library** — add folders; each is matched to its anime and shown with
+  **AniList cover art + banners** in a poster grid.
+- **In-window playback** — video renders inside the app on **libmpv**, with a clean
+  control bar (play/pause, seek, prev/next, volume) below it.
+- **Resume** — every title remembers your position; a progress bar shows it on cards.
+- **Thumbnails** — episode thumbnails generated on the fly (libmpv frame-grab,
+  rate-limited so a big library never blocks the UI).
+- **Keyboard-first** — full shortcut set (below); buttons are keyboard-accessible
+  with visible focus, and motion respects `prefers-reduced-motion`.
+- **Aurora Glass UI** — deep slate base with a living aurora gradient behind
+  frosted-glass panels.
+
+## ⌨️ Keyboard shortcuts
+
+| Key | Action | Key | Action |
+| --- | --- | --- | --- |
+| `Space` | Play / pause | `↑` / `↓` | Volume ± |
+| `← / →` | Seek ∓5s | `M` | Mute |
+| `Z` / `X` | Seek ∓10s | `N` / `P` | Next / previous |
+| `Esc` | Back to library | | |
+
+## 🧱 Tech & architecture
+
+| Layer | Stack |
+| --- | --- |
+| Frontend | React 19 + Vite + TypeScript, hand-written CSS theme |
+| Backend | Rust (Tauri v2) — library scan, config/resume persistence, thumbnails |
+| Playback | **libmpv via hand-written C FFI** — no separate mpv install |
+| Metadata | **AniList GraphQL** (cover/banner/title), cached on disk |
+
+Highlights worth a look in the code:
+- **`src-tauri/src/mpv.rs`** — hand-written `extern "C"` bindings to libmpv, plus a
+  custom Win32 child window the video renders into (WebView2 can't composite over
+  native video, so the bar sits below the video region rather than over it).
+- **`src-tauri/src/anilist.rs`** — GraphQL client + disk cache with title cleanup.
+- **`src/components/PlayerView.tsx`** — mpv lifecycle, keyboard, and a `ResizeObserver`
+  that keeps the native video matched to the stage.
+
+## ⬇️ Install (Windows)
+
+Grab the latest installer from the [**Releases**](../../releases) page:
+- `Vespera_x.y.z_x64-setup.exe` (NSIS) — recommended, or the `.msi`.
+
+libmpv is bundled, so there's nothing else to install.
+
+## 🛠️ Build from source
+
+```bash
+npm install
+npm run tauri dev      # dev (needs Rust toolchain + libmpv set up, below)
+npm run tauri build    # release exe + installers in src-tauri/target/release/
+```
+
+### libmpv setup (one-time)
+
+The build links libmpv and ships `libmpv-2.dll` next to the exe. These binaries are
+gitignored (~118 MB); for a fresh checkout, place them in `src-tauri/libmpv/`:
+
+1. Get `libmpv-2.dll` from an mpv dev build (or scoop's mpv).
+2. Generate the MSVC import lib (from a VS dev shell, in `src-tauri/libmpv/`):
    ```bash
-   # from a VS dev shell, in src-tauri/libmpv/
-   dumpbin /exports libmpv-2.dll | <extract mpv_* names> > mpv.def   # prefix with "EXPORTS"
+   dumpbin /exports libmpv-2.dll   # collect the mpv_* names into mpv.def under "EXPORTS"
    lib /def:mpv.def /out:mpv.lib /machine:x64 /name:libmpv-2.dll
    ```
 3. `build.rs` links `mpv` from `src-tauri/libmpv/` and copies the DLL to the output.
 
-## Develop / Build
+## 📝 Notes
 
-```bash
-npm install
-npm run tauri dev      # requires Rust toolchain + libmpv set up as above
-npm run tauri build
-```
-
-## Status
-
-- ✅ Frontend builds (`npm run build`), backend **builds and links libmpv** (`cargo build`).
-- ✅ Library scan, config + resume, thumbnails, seanime-style cards + sidebar,
-  multi-folder add, twilight theme.
-- ✅ libmpv FFI: create/initialize, loadfile + resume, property observation →
-  events, command/set-property, event thread.
-- ✅ UI stays responsive on load — thumbnail work is async (`spawn_blocking`) and
-  mpv detection is cached (`OnceLock`), so it never blocks the UI thread.
-- ✅ **In-window video:** a native child window (STATIC) is created over the React
-  content area (right of the sidebar) and libmpv embeds into it via `wid`. It is
-  raised on play and hidden on stop, so video appears inside the app while the
-  sidebar / title bar stay interactive. The sidebar shows a Now Playing strip with
-  pause/stop; mpv's OSC handles seek/volume; resize repositions the child window.
-- ⚠️ The video child window is positioned from the content area's measured rect ×
-  devicePixelRatio. On mixed-DPI or unusual layouts the rect may need tuning — run
-  `npm run tauri dev` to verify placement on your display.
+- Windows-only today (the embedded video uses Win32 child-window APIs).
+- Controls sit in a bar beneath the video rather than overlaid on it — WebView2
+  can't reliably composite a web overlay on top of a native video surface, so this
+  is the robust approach for a Tauri player.
