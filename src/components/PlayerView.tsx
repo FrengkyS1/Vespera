@@ -54,6 +54,7 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
   const durRef = useRef(0);
   const pausedRef = useRef(false);
   const fullscreenRef = useRef(false);
+  const wasMaxRef = useRef(false);
   const pathRef = useRef(video.path);
   const startedRef = useRef(false);
 
@@ -101,6 +102,11 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
     };
 
     (async () => {
+      // Fill the screen while watching (Denshi-style), so the video is
+      // edge-to-edge and the overlay sits at the bottom of the screen.
+      wasMaxRef.current = await main.isMaximized().catch(() => false);
+      if (!wasMaxRef.current) await main.maximize().catch(() => {});
+
       unlisten = await onMpvEvent((e) => {
         if (e.event === "end-file") {
           if (e.reason === 0) goNext();
@@ -230,6 +236,7 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
       saveNow();
       if (unlisten) unlisten();
       main.setFullscreen(false).catch(() => {});
+      if (!wasMaxRef.current) main.unmaximize().catch(() => {});
       if (bar) bar.close().catch(() => {});
       mpvStop();
     };
