@@ -20,6 +20,7 @@ import { Sidebar, type Selection } from "./components/Sidebar";
 import { LibraryView } from "./components/LibraryView";
 import { SettingsView } from "./components/SettingsView";
 import { PlayerView } from "./components/PlayerView";
+import { resolveKeybinds } from "./keybinds";
 
 export function App() {
   const [config, setConfig] = useState<AppConfig>({
@@ -27,6 +28,7 @@ export function App() {
     default_volume: 100,
     accent: "#6d5dfc",
     mpv_path: "",
+    keybinds: {},
   });
   const [folders, setFolders] = useState<Folder[]>([]);
   const [progress, setProgress] = useState<ProgressMap>({});
@@ -141,6 +143,7 @@ export function App() {
           video={nowPlaying}
           resume={progress[nowPlaying.path]}
           defaultVolume={config.default_volume}
+          keybinds={resolveKeybinds(config.keybinds)}
           onClose={closePlayer}
           onNext={playNext}
           onPrev={playPrev}

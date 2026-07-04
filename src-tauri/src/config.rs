@@ -17,6 +17,9 @@ pub struct AppConfig {
     pub accent: String,
     /// Optional explicit path to mpv.exe; empty = use bundled / PATH.
     pub mpv_path: String,
+    /// Player keybinds: action name -> key. Empty entries fall back to the
+    /// frontend defaults, so old configs keep working.
+    pub keybinds: HashMap<String, String>,
 }
 
 impl Default for AppConfig {
@@ -26,6 +29,7 @@ impl Default for AppConfig {
             default_volume: 100,
             accent: "#6D5DFC".to_string(),
             mpv_path: String::new(),
+            keybinds: HashMap::new(),
         }
     }
 }

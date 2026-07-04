@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   FastForward,
+  Maximize,
   Pause,
   Play,
   Rewind,
@@ -13,15 +14,17 @@ import { mpvCommand, mpvSetDouble, onMpvEvent } from "../api";
 
 interface Props {
   title: string;
+  visible: boolean;
   onBack: () => void;
   onNext: () => void;
   onPrev: () => void;
+  onFullscreen: () => void;
 }
 
 // In-window control bar that sits directly below the video. It shares the mpv
 // backend, so it drives playback and reflects state from mpv events; library
 // navigation is handled by callbacks from the player.
-export function ControlBar({ title, onBack, onNext, onPrev }: Props) {
+export function ControlBar({ title, visible, onBack, onNext, onPrev, onFullscreen }: Props) {
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -49,7 +52,7 @@ export function ControlBar({ title, onBack, onNext, onPrev }: Props) {
   const pct = dur > 0 ? (pos / dur) * 100 : 0;
 
   return (
-    <div className="player-bar">
+    <div className={`player-bar${visible ? "" : " hidden"}`}>
       <div className="bar-top">
         <button className="ctrl-btn sm" onClick={onBack} title="Back to library (Esc)">
           <ArrowLeft size={18} />
@@ -94,6 +97,9 @@ export function ControlBar({ title, onBack, onNext, onPrev }: Props) {
             }}
           />
         </div>
+        <button className="ctrl-btn" onClick={onFullscreen} title="Fullscreen (F)">
+          <Maximize size={19} />
+        </button>
       </div>
     </div>
   );

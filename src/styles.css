@@ -815,6 +815,10 @@ button {
   border-top: 1px solid var(--glass-border);
   padding: 10px 20px 12px;
 }
+/* Auto-hidden: removed from flow so the video reclaims the space. */
+.player-bar.hidden {
+  display: none;
+}
 .player-hotzone {
   flex-shrink: 0;
   height: 14px;

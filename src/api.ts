@@ -21,6 +21,7 @@ export interface AppConfig {
   default_volume: number;
   accent: string;
   mpv_path: string;
+  keybinds: Record<string, string>;
 }
 
 export interface Progress {

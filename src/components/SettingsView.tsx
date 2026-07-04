@@ -1,5 +1,7 @@
-import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { AppConfig } from "../api";
+import { ACTIONS, displayKey, normalizeKey, resolveKeybinds } from "../keybinds";
 
 interface Props {
   config: AppConfig;
@@ -8,17 +10,27 @@ interface Props {
   onRemoveFolder: (path: string) => void;
 }
 
-const SHORTCUTS: [string, string][] = [
-  ["Space", "Play / Pause"],
-  ["← / →", "Seek 5 seconds"],
-  ["Z / X", "Seek 10 seconds"],
-  ["↑ / ↓", "Volume"],
-  ["N / P", "Next / Previous video"],
-  ["M", "Mute"],
-  ["Esc", "Back to library"],
-];
-
 export function SettingsView({ config, onChange, onAddFolder, onRemoveFolder }: Props) {
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const binds = resolveKeybinds(config.keybinds);
+
+  // While rebinding, capture the next key press.
+  useEffect(() => {
+    if (!capturing) return;
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault();
+      if (e.key !== "Escape") {
+        onChange({
+          ...config,
+          keybinds: { ...config.keybinds, [capturing]: normalizeKey(e.key) },
+        });
+      }
+      setCapturing(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [capturing, config, onChange]);
+
   return (
     <div className="main">
       <div className="topbar">
@@ -32,9 +44,7 @@ export function SettingsView({ config, onChange, onAddFolder, onRemoveFolder }: 
         <div className="settings">
           <div className="section-h">Library folders</div>
           {config.folders.length === 0 && (
-            <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 10 }}>
-              No folders yet.
-            </p>
+            <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 10 }}>No folders yet.</p>
           )}
           {config.folders.map((f) => (
             <div className="folder-row" key={f}>
@@ -62,9 +72,7 @@ export function SettingsView({ config, onChange, onAddFolder, onRemoveFolder }: 
                 min={0}
                 max={100}
                 value={config.default_volume}
-                onChange={(e) =>
-                  onChange({ ...config, default_volume: Number(e.target.value) })
-                }
+                onChange={(e) => onChange({ ...config, default_volume: Number(e.target.value) })}
               />
               <span className="time">{config.default_volume}%</span>
             </div>
@@ -73,7 +81,7 @@ export function SettingsView({ config, onChange, onAddFolder, onRemoveFolder }: 
           <div className="setting">
             <div>
               <div className="label">Accent color</div>
-              <div className="desc">The luminous amber highlight.</div>
+              <div className="desc">The luminous highlight.</div>
             </div>
             <div className="control">
               <input
@@ -84,13 +92,37 @@ export function SettingsView({ config, onChange, onAddFolder, onRemoveFolder }: 
             </div>
           </div>
 
-          <div className="section-h">Keyboard shortcuts</div>
-          {SHORTCUTS.map(([k, label]) => (
-            <div className="shortcut" key={k}>
-              <span>{label}</span>
-              <span className="kbd">{k}</span>
+          <div className="section-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>Keyboard shortcuts</span>
+            <button
+              className="btn-ghost"
+              style={{ width: "auto", padding: "5px 10px", fontSize: 12 }}
+              onClick={() => onChange({ ...config, keybinds: {} })}
+              title="Reset all shortcuts to defaults"
+            >
+              <RotateCcw size={13} /> Reset
+            </button>
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: 12, marginBottom: 8 }}>
+            Click a shortcut, then press the key you want. Left-click the video to pause; Esc exits
+            fullscreen or returns to the library.
+          </p>
+          {ACTIONS.map((a) => (
+            <div className="shortcut" key={a.id}>
+              <span>{a.label}</span>
+              <button
+                className="kbd"
+                style={{ cursor: "pointer", minWidth: 64, textAlign: "center" }}
+                onClick={() => setCapturing(a.id)}
+              >
+                {capturing === a.id ? "Press a key…" : displayKey(binds[a.id])}
+              </button>
             </div>
           ))}
+          <div className="shortcut">
+            <span>Back to library</span>
+            <span className="kbd">Esc</span>
+          </div>
         </div>
       </div>
     </div>
