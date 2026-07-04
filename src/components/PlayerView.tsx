@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
+import { WebviewWindow, getAllWebviewWindows } from "@tauri-apps/api/webviewWindow";
+import { listen } from "@tauri-apps/api/event";
 import {
+  appForeground,
   cursorPos,
   mpvCommand,
   mpvLoad,
@@ -16,13 +20,13 @@ import {
   type VideoFile,
 } from "../api";
 import { keyToAction, normalizeKey, type PlayerAction } from "../keybinds";
-import { ControlBar } from "./ControlBar";
 
-const BAR_H = 96; // logical px reserved for the control bar (for the hover zone)
+const CONTROLS_H = 150; // logical px height of the floating overlay controls
 
-// Physical-pixel rect of the video stage. Floor the origin and ceil the size so
-// the native video window fully covers the stage (no thin black edge from
-// sub-pixel DPI rounding).
+// Physical-pixel rect of the full video area. Floor origin / ceil size so the
+// native video window fully covers it (no sub-pixel black edge). The video
+// stays full-window at all times; the controls float on top, so it never
+// shrinks and never letterboxes from the bar.
 function stageRect(el: HTMLElement | null): Rect {
   const r = el?.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -52,12 +56,10 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
   const fullscreenRef = useRef(false);
   const pathRef = useRef(video.path);
   const startedRef = useRef(false);
-  const [controlsVisible, setControlsVisible] = useState(true);
 
   const cb = useRef({ onClose, onNext, onPrev });
   cb.current = { onClose, onNext, onPrev };
 
-  // Latest key→action map, read live by the keydown handler.
   const keyMapRef = useRef(keyToAction(keybinds));
   keyMapRef.current = keyToAction(keybinds);
 
@@ -67,44 +69,41 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
     }
   };
 
-  const handleBack = () => {
-    saveNow();
-    cb.current.onClose();
-  };
-  const handleNext = () => {
-    saveNow();
-    cb.current.onNext();
-  };
-  const handlePrev = () => {
-    saveNow();
-    cb.current.onPrev();
-  };
-
-  const toggleFullscreen = async () => {
-    const win = getCurrentWindow();
-    const fs = !fullscreenRef.current;
-    try {
-      await win.setFullscreen(fs);
-      fullscreenRef.current = fs;
-    } catch {
-      /* ignore */
-    }
-  };
-
-  // ── Player lifecycle: mpv events, keyboard, auto-hide, sizing ──
+  // ── Player lifecycle: mpv events, keyboard, floating controls, sizing ──
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let unNav: Array<() => void> = [];
     let poll: number | undefined;
-    const win = getCurrentWindow();
+    let bar: WebviewWindow | null = null;
+    const main = getCurrentWindow();
     const onResize = () => mpvResize(stageRect(stageRef.current));
+
+    const goBack = () => {
+      saveNow();
+      cb.current.onClose();
+    };
+    const goNext = () => {
+      saveNow();
+      cb.current.onNext();
+    };
+    const goPrev = () => {
+      saveNow();
+      cb.current.onPrev();
+    };
+    const toggleFullscreen = async () => {
+      const fs = !fullscreenRef.current;
+      try {
+        await main.setFullscreen(fs);
+        fullscreenRef.current = fs;
+      } catch {
+        /* ignore */
+      }
+    };
 
     (async () => {
       unlisten = await onMpvEvent((e) => {
         if (e.event === "end-file") {
-          if (e.reason === 0) {
-            saveNow();
-            cb.current.onNext();
-          }
+          if (e.reason === 0) goNext();
           return;
         }
         if (e.event !== "property-change") return;
@@ -113,30 +112,77 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
         else if (e.name === "pause" && typeof e.data === "boolean") pausedRef.current = e.data;
       });
 
-      // Auto-hide: poll the global cursor (the webview can't see the mouse over
-      // the native video). Show the bar on movement or near the bottom; hide it
-      // after a short idle. Toggling it resizes the stage, so the video reclaims
-      // the space via the ResizeObserver below.
-      const scale = await win.scaleFactor().catch(() => 1);
+      // Nav / fullscreen actions emitted by the floating controls window.
+      unNav.push(await listen("vespera://back", goBack));
+      unNav.push(await listen("vespera://next", goNext));
+      unNav.push(await listen("vespera://prev", goPrev));
+      unNav.push(await listen("vespera://fullscreen", () => toggleFullscreen()));
+
+      // Create (or reuse) the transparent, always-on-top controls overlay.
+      const existing = (await getAllWebviewWindows()).find((w) => w.label === "controls");
+      bar =
+        existing ??
+        new WebviewWindow("controls", {
+          url: "index.html?view=controls",
+          decorations: false,
+          transparent: true,
+          alwaysOnTop: true,
+          skipTaskbar: true,
+          focus: false,
+          shadow: false,
+          resizable: false,
+          visible: false,
+          width: 900,
+          height: CONTROLS_H,
+          title: "controls",
+        });
+
+      // Position + auto-hide, driven by the global cursor. Gated on Vespera being
+      // the foreground app (via app_foreground), so the overlay never floats over
+      // other apps and still shows while the video itself has focus.
+      const scale = await main.scaleFactor().catch(() => 1);
       let lastCur: [number, number] = [-1, -1];
       let lastMove = Date.now();
+      let shown = false;
+      let lastBounds = "";
       poll = window.setInterval(async () => {
+        if (!bar) return;
         try {
-          const [cur, op, os] = await Promise.all([cursorPos(), win.outerPosition(), win.outerSize()]);
+          const [cur, op, os, foreground, minimized] = await Promise.all([
+            cursorPos(),
+            main.outerPosition(),
+            main.outerSize(),
+            appForeground(),
+            main.isMinimized(),
+          ]);
+          const barPx = Math.round(CONTROLS_H * scale);
+          const x = op.x;
+          const y = op.y + os.height - barPx;
+          const bounds = `${x},${y},${os.width},${barPx}`;
+          if (bounds !== lastBounds) {
+            lastBounds = bounds;
+            await bar.setPosition(new PhysicalPosition(x, y));
+            await bar.setSize(new PhysicalSize(os.width, barPx));
+          }
           const moved = cur[0] !== lastCur[0] || cur[1] !== lastCur[1];
           lastCur = cur;
           if (moved) lastMove = Date.now();
           const inWindow =
             cur[0] >= op.x && cur[0] <= op.x + os.width && cur[1] >= op.y && cur[1] <= op.y + os.height;
-          const barTop = op.y + os.height - Math.round((BAR_H + 52) * scale);
-          const inBarZone = inWindow && cur[1] >= barTop;
+          const inZone = inWindow && cur[1] >= y - Math.round(40 * scale);
           const active = Date.now() - lastMove < 2600;
-          const want = pausedRef.current || inBarZone || (inWindow && active);
-          setControlsVisible((v) => (v === want ? v : want));
+          const want = !minimized && foreground && (pausedRef.current || inZone || (inWindow && active));
+          if (want && !shown) {
+            shown = true;
+            await bar.show();
+          } else if (!want && shown) {
+            shown = false;
+            await bar.hide();
+          }
         } catch {
           /* window closing */
         }
-      }, 150);
+      }, 130);
     })();
 
     const save = window.setInterval(saveNow, 5000);
@@ -147,10 +193,10 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
     const onKey = async (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (fullscreenRef.current) {
-          await win.setFullscreen(false).catch(() => {});
+          await main.setFullscreen(false).catch(() => {});
           fullscreenRef.current = false;
         } else {
-          handleBack();
+          goBack();
         }
         return;
       }
@@ -158,42 +204,18 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
       if (!action) return;
       e.preventDefault();
       switch (action) {
-        case "playPause":
-          mpvCommand(["cycle", "pause"]);
-          break;
-        case "seekBack":
-          mpvCommand(["seek", "-5", "relative"]);
-          break;
-        case "seekFwd":
-          mpvCommand(["seek", "5", "relative"]);
-          break;
-        case "seekBackLong":
-          mpvCommand(["seek", "-10", "relative"]);
-          break;
-        case "seekFwdLong":
-          mpvCommand(["seek", "10", "relative"]);
-          break;
-        case "volUp":
-          mpvCommand(["add", "volume", "5"]);
-          break;
-        case "volDown":
-          mpvCommand(["add", "volume", "-5"]);
-          break;
-        case "mute":
-          mpvCommand(["cycle", "mute"]);
-          break;
-        case "next":
-          handleNext();
-          break;
-        case "prev":
-          handlePrev();
-          break;
-        case "fullscreen":
-          await toggleFullscreen();
-          break;
-        case "cycleFit":
-          mpvCommand(["cycle-values", "panscan", "1.0", "0.0"]);
-          break;
+        case "playPause": mpvCommand(["cycle", "pause"]); break;
+        case "seekBack": mpvCommand(["seek", "-5", "relative"]); break;
+        case "seekFwd": mpvCommand(["seek", "5", "relative"]); break;
+        case "seekBackLong": mpvCommand(["seek", "-10", "relative"]); break;
+        case "seekFwdLong": mpvCommand(["seek", "10", "relative"]); break;
+        case "volUp": mpvCommand(["add", "volume", "5"]); break;
+        case "volDown": mpvCommand(["add", "volume", "-5"]); break;
+        case "mute": mpvCommand(["cycle", "mute"]); break;
+        case "next": goNext(); break;
+        case "prev": goPrev(); break;
+        case "fullscreen": await toggleFullscreen(); break;
+        case "cycleFit": mpvCommand(["cycle-values", "panscan", "1.0", "0.0"]); break;
       }
     };
     window.addEventListener("keydown", onKey);
@@ -204,9 +226,11 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
       window.removeEventListener("resize", onResize);
       ro.disconnect();
       window.removeEventListener("keydown", onKey);
+      unNav.forEach((u) => u());
       saveNow();
       if (unlisten) unlisten();
-      win.setFullscreen(false).catch(() => {});
+      main.setFullscreen(false).catch(() => {});
+      if (bar) bar.close().catch(() => {});
       mpvStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,14 +265,6 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
           <span>{video.title}</span>
         </div>
       </div>
-      <ControlBar
-        title={video.title}
-        visible={controlsVisible}
-        onBack={handleBack}
-        onNext={handleNext}
-        onPrev={handlePrev}
-        onFullscreen={toggleFullscreen}
-      />
     </div>
   );
 }
