@@ -148,7 +148,7 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
       // other apps and still shows while the video itself has focus.
       const scale = await main.scaleFactor().catch(() => 1);
       let lastCur: [number, number] = [-1, -1];
-      let lastMove = Date.now();
+      let lastMove = 0; // start hidden; only show once the mouse actually moves
       let shown = false;
       let lastBounds = "";
       poll = window.setInterval(async () => {
@@ -167,8 +167,10 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
           const bounds = `${x},${y},${os.width},${barPx}`;
           if (bounds !== lastBounds) {
             lastBounds = bounds;
-            await bar.setPosition(new PhysicalPosition(x, y));
+            // Size first, then position — resizing can re-center the window, so
+            // the position must be applied last to stick at the bottom.
             await bar.setSize(new PhysicalSize(os.width, barPx));
+            await bar.setPosition(new PhysicalPosition(x, y));
           }
           const moved = cur[0] !== lastCur[0] || cur[1] !== lastCur[1];
           lastCur = cur;
