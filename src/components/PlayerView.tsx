@@ -45,7 +45,6 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
   const posRef = useRef(0);
   const durRef = useRef(0);
   const fullscreenRef = useRef(false);
-  const wasMaxRef = useRef(false);
   const pathRef = useRef(video.path);
   const startedRef = useRef(false);
 
@@ -89,10 +88,6 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
     const onResize = () => mpvResize(stageRect(stageRef.current));
 
     (async () => {
-      // Fill the screen while watching so the video is as large as possible.
-      wasMaxRef.current = await win.isMaximized().catch(() => false);
-      if (!wasMaxRef.current) await win.maximize().catch(() => {});
-
       unlisten = await onMpvEvent((e) => {
         if (e.event === "end-file") {
           if (e.reason === 0) {
@@ -150,7 +145,6 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
       saveNow();
       if (unlisten) unlisten();
       win.setFullscreen(false).catch(() => {});
-      if (!wasMaxRef.current) win.unmaximize().catch(() => {});
       mpvStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
