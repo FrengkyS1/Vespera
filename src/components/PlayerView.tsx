@@ -161,23 +161,25 @@ export function PlayerView({ video, resume, defaultVolume, keybinds, onClose, on
             appForeground(),
             main.isMinimized(),
           ]);
-          const barPx = Math.round(CONTROLS_H * scale);
-          const x = op.x;
-          const y = op.y + os.height - barPx;
-          const bounds = `${x},${y},${os.width},${barPx}`;
-          if (bounds !== lastBounds) {
-            lastBounds = bounds;
-            // Size first, then position — resizing can re-center the window, so
-            // the position must be applied last to stick at the bottom.
-            await bar.setSize(new PhysicalSize(os.width, barPx));
-            await bar.setPosition(new PhysicalPosition(x, y));
+          // The overlay covers the whole window; controls are anchored to the
+          // bottom via CSS. A full-window overlay can't be "mid-screen" no
+          // matter how the OS re-centers on resize.
+          const sizeKey = `${os.width},${os.height}`;
+          if (sizeKey !== lastBounds) {
+            lastBounds = sizeKey;
+            await bar.setSize(new PhysicalSize(os.width, os.height));
           }
+          // Re-assert the position every tick so an async resize-recenter can't
+          // strand it away from the main window.
+          await bar.setPosition(new PhysicalPosition(op.x, op.y));
+
           const moved = cur[0] !== lastCur[0] || cur[1] !== lastCur[1];
           lastCur = cur;
           if (moved) lastMove = Date.now();
           const inWindow =
             cur[0] >= op.x && cur[0] <= op.x + os.width && cur[1] >= op.y && cur[1] <= op.y + os.height;
-          const inZone = inWindow && cur[1] >= y - Math.round(40 * scale);
+          const barTop = op.y + os.height - Math.round((CONTROLS_H + 60) * scale);
+          const inZone = inWindow && cur[1] >= barTop;
           const active = Date.now() - lastMove < 2600;
           const want = !minimized && foreground && (pausedRef.current || inZone || (inWindow && active));
           if (want && !shown) {

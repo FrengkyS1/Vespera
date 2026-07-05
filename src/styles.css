@@ -850,12 +850,14 @@ button {
   justify-content: flex-end;
   gap: 10px;
   padding: 0 22px 16px;
+  /* Bottom-only scrim (px-based) — the overlay covers the whole window, so only
+     the bottom band is darkened; the rest stays fully transparent over video. */
   background: linear-gradient(
     0deg,
-    rgba(8, 8, 14, 0.94) 0%,
-    rgba(8, 8, 14, 0.62) 38%,
-    rgba(8, 8, 14, 0.12) 78%,
-    rgba(8, 8, 14, 0) 100%
+    rgba(8, 8, 14, 0.94) 0px,
+    rgba(8, 8, 14, 0.6) 90px,
+    rgba(8, 8, 14, 0.12) 180px,
+    rgba(8, 8, 14, 0) 240px
   );
 }
 .cbar .seek {
