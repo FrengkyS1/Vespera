@@ -1,23 +1,29 @@
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  FastForward,
   Maximize,
   Pause,
   Play,
   Rewind,
-  FastForward,
   SkipBack,
   SkipForward,
   Volume2,
 } from "lucide-react";
-import { emit } from "@tauri-apps/api/event";
 import { mpvCommand, mpvSetDouble, onMpvEvent } from "../api";
 
-// Renders in the transparent, always-on-top "controls" overlay window that
-// floats over the bottom of the video. It shares the mpv backend (drives
-// playback directly, reflects state from mpv events); library navigation and
-// fullscreen are emitted to the main window.
-export function ControlBar() {
+interface Props {
+  title: string;
+  onBack: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  onFullscreen: () => void;
+}
+
+// Always-visible control bar rendered inside the main window, directly below the
+// video. Being part of the window (not a separate always-on-top window) it can't
+// land mid-screen or float over other apps. Drives mpv directly.
+export function ControlBar({ title, onBack, onNext, onPrev, onFullscreen }: Props) {
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -45,7 +51,13 @@ export function ControlBar() {
   const pct = dur > 0 ? (pos / dur) * 100 : 0;
 
   return (
-    <div className="cbar">
+    <div className="player-bar">
+      <div className="bar-top">
+        <button className="ctrl-btn sm" onClick={onBack} title="Back to library (Esc)">
+          <ArrowLeft size={18} />
+        </button>
+        <span className="bar-title">{title}</span>
+      </div>
       <div className="seek" onClick={seekTo}>
         <div className="fill" style={{ width: `${pct}%` }} />
         <div className="knob" style={{ left: `${pct}%` }} />
@@ -54,7 +66,7 @@ export function ControlBar() {
         <button className="ctrl-btn play" onClick={() => mpvCommand(["cycle", "pause"])} title="Play / Pause (Space)">
           {paused ? <Play size={22} fill="currentColor" /> : <Pause size={22} fill="currentColor" />}
         </button>
-        <button className="ctrl-btn" onClick={() => emit("vespera://prev")} title="Previous (P)">
+        <button className="ctrl-btn" onClick={onPrev} title="Previous (P)">
           <SkipBack size={20} />
         </button>
         <button className="ctrl-btn" onClick={() => mpvCommand(["seek", "-10", "relative"])} title="-10s (Z)">
@@ -63,7 +75,7 @@ export function ControlBar() {
         <button className="ctrl-btn" onClick={() => mpvCommand(["seek", "10", "relative"])} title="+10s (X)">
           <FastForward size={20} />
         </button>
-        <button className="ctrl-btn" onClick={() => emit("vespera://next")} title="Next (N)">
+        <button className="ctrl-btn" onClick={onNext} title="Next (N)">
           <SkipForward size={20} />
         </button>
         <span className="time">
@@ -84,11 +96,8 @@ export function ControlBar() {
             }}
           />
         </div>
-        <button className="ctrl-btn" onClick={() => emit("vespera://fullscreen")} title="Fullscreen (F)">
+        <button className="ctrl-btn" onClick={onFullscreen} title="Fullscreen (F)">
           <Maximize size={19} />
-        </button>
-        <button className="ctrl-btn" onClick={() => emit("vespera://back")} title="Back to library (Esc)">
-          <ArrowLeft size={20} />
         </button>
       </div>
     </div>
