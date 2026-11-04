@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vespera</title>
+    <!-- Paint the Seanime near-black immediately so there's no white flash
+         before the CSS bundle loads (dev-mode FOUC). -->
+    <style>
+      html, body, #root { background: #070707; margin: 0; height: 100%; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

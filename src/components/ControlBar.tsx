@@ -9,6 +9,7 @@ import {
   SkipBack,
   SkipForward,
   Volume2,
+  VolumeX,
 } from "lucide-react";
 import { mpvCommand, mpvSetDouble, onMpvEvent } from "../api";
 
@@ -28,6 +29,7 @@ export function ControlBar({ title, onBack, onNext, onPrev, onFullscreen }: Prop
   const [dur, setDur] = useState(0);
   const [paused, setPaused] = useState(false);
   const [volume, setVolume] = useState(100);
+  const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -37,6 +39,7 @@ export function ControlBar({ title, onBack, onNext, onPrev, onFullscreen }: Prop
       else if (e.name === "duration" && typeof e.data === "number") setDur(e.data);
       else if (e.name === "pause" && typeof e.data === "boolean") setPaused(e.data);
       else if (e.name === "volume" && typeof e.data === "number") setVolume(Math.round(e.data));
+      else if (e.name === "mute" && typeof e.data === "boolean") setMuted(e.data);
     }).then((u) => (unlisten = u));
     return () => {
       if (unlisten) unlisten();
@@ -83,7 +86,9 @@ export function ControlBar({ title, onBack, onNext, onPrev, onFullscreen }: Prop
         </span>
         <span className="spacer" />
         <div className="vol">
-          <Volume2 size={18} />
+          <button className="ctrl-btn sm" onClick={() => mpvCommand(["cycle", "mute"])} title="Mute (M)">
+            {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
           <input
             type="range"
             min={0}

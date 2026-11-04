@@ -292,6 +292,7 @@ impl MpvState {
             }
             mpv_observe_property(ctx, 2, cstr("pause").as_ptr(), MPV_FORMAT_FLAG);
             mpv_observe_property(ctx, 3, cstr("volume").as_ptr(), MPV_FORMAT_DOUBLE);
+            mpv_observe_property(ctx, 4, cstr("mute").as_ptr(), MPV_FORMAT_FLAG);
             cmd_raw(ctx, &["keybind", "MBTN_LEFT", "cycle pause"]);
             spawn_event_thread(app.clone(), Ctx(ctx));
             *self.inner.lock().map_err(|e| e.to_string())? = Some(Player { ctx: Ctx(ctx), child });

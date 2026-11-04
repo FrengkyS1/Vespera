@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { AppConfig } from "../api";
-import { ACTIONS, displayKey, normalizeKey, resolveKeybinds } from "../keybinds";
+import { ACTIONS, displayKey, normalizeKey, resolveKeybinds, type PlayerAction } from "../keybinds";
 
 interface Props {
   config: AppConfig;
@@ -20,10 +20,15 @@ export function SettingsView({ config, onChange, onAddFolder, onRemoveFolder }: 
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       if (e.key !== "Escape") {
-        onChange({
-          ...config,
-          keybinds: { ...config.keybinds, [capturing]: normalizeKey(e.key) },
-        });
+        const key = normalizeKey(e.key);
+        const next: Record<string, string> = { ...config.keybinds, [capturing]: key };
+        // If another action already owns this key, give it the key being freed up
+        // instead of silently leaving two actions bound to the same key.
+        const displaced = (Object.keys(binds) as PlayerAction[]).find(
+          (id) => id !== capturing && binds[id] === key,
+        );
+        if (displaced) next[displaced] = binds[capturing as PlayerAction];
+        onChange({ ...config, keybinds: next });
       }
       setCapturing(null);
     };

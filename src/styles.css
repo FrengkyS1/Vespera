@@ -1,26 +1,29 @@
 /* Vespera — seanime theme: near-black + indigo/violet brand accent. */
 :root {
-  /* Aurora Glass — deep slate base, frosted glass panels, blue→violet aurora. */
-  --bg: #0a0a12;
-  --surface: rgba(255, 255, 255, 0.05);
-  --surface-2: rgba(255, 255, 255, 0.08);
-  --hover: rgba(255, 255, 255, 0.1);
-  --accent: #7c83ff;
-  --accent-light: #a99bff;
-  --accent-deep: #6a5bf0;
-  --accent-2: #c26bff;
-  --cta: #ff5c8a;
-  --accent-grad: linear-gradient(135deg, #5b8cff, #c26bff);
-  --text: #ececf2;
-  --text-2: rgba(255, 255, 255, 0.66);
-  --muted: rgba(255, 255, 255, 0.5);
-  --border: rgba(255, 255, 255, 0.1);
-  --glass-border: rgba(255, 255, 255, 0.14);
-  --glow: 124, 131, 255;
-  --blur: 16px;
-  --radius: 12px;
-  --radius-sm: 9px;
-  --shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+  /* Seanime dark theme — flat near-black surfaces, indigo/periwinkle brand.
+     Values map 1:1 to Seanime's tokens (background #070707, brand 300/400/500,
+     white-alpha borders/muted). No aurora, no glass blur. */
+  --bg: #070707; /* --background */
+  --paper: #0b0b0b; /* gray.950 — cards/panels */
+  --surface: #0e0e0e; /* elevated panels */
+  --surface-2: #171717; /* gray.800-ish */
+  --hover: rgba(255, 255, 255, 0.06); /* --subtle */
+  --accent: #6152df; /* brand.500 — solid brand */
+  --accent-light: #9f92ff; /* brand.400 */
+  --accent-deep: #5243cb; /* brand.600 */
+  --accent-2: #c7c2ff; /* brand.300 — light brand/text */
+  --cta: #6152df;
+  --accent-grad: linear-gradient(180deg, #6152df, #5243cb);
+  --text: #d4d4d4; /* ~gray.200 foreground */
+  --text-2: rgba(255, 255, 255, 0.6); /* --muted-highlight */
+  --muted: rgba(255, 255, 255, 0.4); /* --muted */
+  --border: rgba(255, 255, 255, 0.1); /* --border */
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glow: 97, 82, 223; /* brand rgb — tints/rings */
+  --blur: 0px; /* flat: Seanime uses no backdrop blur in-app */
+  --radius: 8px; /* 0.5rem */
+  --radius-sm: 6px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
@@ -46,27 +49,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Living aurora behind the frosted-glass UI. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  background:
-    radial-gradient(38% 48% at 12% 4%, rgba(91, 140, 255, 0.22), transparent 70%),
-    radial-gradient(42% 52% at 98% 8%, rgba(194, 107, 255, 0.2), transparent 72%),
-    radial-gradient(46% 50% at 82% 102%, rgba(255, 92, 138, 0.14), transparent 70%),
-    radial-gradient(50% 60% at 28% 100%, rgba(91, 140, 255, 0.1), transparent 75%);
-  animation: aurora 18s ease-in-out infinite alternate;
-}
-@keyframes aurora {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(0, -2%, 0) scale(1.08);
-  }
-}
+/* Seanime is a flat near-black surface — no aurora. */
 
 button {
   font-family: inherit;
@@ -564,8 +547,7 @@ button {
   padding: 30px 30px 26px;
   margin-bottom: 6px;
   background:
-    radial-gradient(120% 140% at 85% -20%, rgba(var(--glow), 0.28), transparent 55%),
-    radial-gradient(90% 120% at 0% 120%, rgba(255, 92, 138, 0.16), transparent 60%),
+    radial-gradient(120% 140% at 85% -20%, rgba(var(--glow), 0.22), transparent 55%),
     linear-gradient(115deg, var(--surface-2), var(--surface));
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
@@ -882,6 +864,181 @@ button {
 .player-loading .player-hint {
   font-size: 11px;
   color: var(--muted);
+}
+
+/* ── Transparent overlay ("controls") window ──────────────────────
+   A second, always-on-top window whose webview is transparent so the HTML
+   controls alpha-blend over the native mpv video beneath. Strip the app
+   background + aurora so only the control scrims paint. */
+html.overlay-window,
+html.overlay-window body,
+html.overlay-window #root {
+  background: transparent !important;
+}
+html.overlay-window body::before {
+  display: none !important;
+}
+.overlay-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: #fff;
+  font-family: var(--font);
+}
+.overlay-root.vc-idle {
+  cursor: none;
+}
+.overlay-root .player-center {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+/* Top scrim: back button + title (Seanime uses a soft black-to-transparent
+   gradient; controls fade together). */
+.overlay-root .vc-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 44px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.4), transparent);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.overlay-root .vc-top.hidden {
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+.overlay-root .vc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Bottom scrim + control cluster. */
+.overlay-root .vc-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 64px 24px 18px;
+  color: #fff;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.16) 45%, transparent 100%);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.overlay-root .vc-bottom.hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+/* White scrubber (Seanime VideoCore: bg-white played, bg-white/20 track). */
+.overlay-root .seek {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  transition: height 0.12s ease;
+}
+.overlay-root .seek:hover {
+  height: 6px;
+}
+.overlay-root .seek .fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: #fff;
+}
+.overlay-root .seek .knob {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.overlay-root .seek:hover .knob {
+  opacity: 1;
+}
+
+.overlay-root .vc-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+/* Icon buttons: no background, white, dim on hover (Seanime style). */
+.overlay-root .vc-btn {
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  color: #fff;
+  opacity: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s ease, transform 0.1s ease;
+}
+.overlay-root .vc-btn:hover {
+  opacity: 0.8;
+}
+.overlay-root .vc-btn:active {
+  transform: scale(0.92);
+}
+.overlay-root .vc-play {
+  margin-right: 2px;
+}
+.overlay-root .vc-time {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.overlay-root .vc-time-dim {
+  color: rgba(255, 255, 255, 0.55);
+}
+.overlay-root .vc-spacer {
+  flex: 1;
+}
+/* Hover-expand volume slider (Seanime style). */
+.overlay-root .vc-vol {
+  display: flex;
+  align-items: center;
+}
+.overlay-root .vc-vol input {
+  width: 0;
+  opacity: 0;
+  height: 4px;
+  margin-right: 2px;
+  accent-color: #fff;
+  cursor: pointer;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+.overlay-root .vc-vol:hover input {
+  width: 84px;
+  opacity: 1;
+  margin-right: 8px;
 }
 .spin {
   animation: spin 1s linear infinite;

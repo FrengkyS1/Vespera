@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 export interface VideoFile {
   path: string;
@@ -97,3 +98,31 @@ export interface MpvEvent {
 
 export const onMpvEvent = (cb: (e: MpvEvent) => void): Promise<UnlistenFn> =>
   listen<MpvEvent>("mpv-event", (e) => cb(e.payload));
+
+// ── Overlay ("controls") window ──
+// Playback controls render in a separate transparent, always-on-top window so
+// HTML can alpha-blend over the native mpv video (a child HWND that WebView2
+// can't composite over). The overlay drives mpv transport directly; app-level
+// actions are forwarded to the main window, which owns playback + window state.
+export type PlayerActionKind = "close" | "next" | "prev" | "fullscreen";
+
+export const emitPlayerAction = (action: PlayerActionKind) =>
+  emit("player-action", { action });
+export const onPlayerAction = (
+  cb: (action: PlayerActionKind) => void,
+): Promise<UnlistenFn> =>
+  listen<{ action: PlayerActionKind }>("player-action", (e) => cb(e.payload.action));
+
+export interface ControlsState {
+  active: boolean; // playback in progress → overlay should engage
+  title: string;
+  keybinds: Record<string, string>;
+}
+export const emitControlsState = (s: ControlsState) => emit("controls-state", s);
+export const onControlsState = (
+  cb: (s: ControlsState) => void,
+): Promise<UnlistenFn> =>
+  listen<ControlsState>("controls-state", (e) => cb(e.payload));
+
+/** The transparent overlay window, or null if it wasn't created (→ fallback). */
+export const controlsWindow = () => WebviewWindow.getByLabel("controls");

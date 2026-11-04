@@ -135,6 +135,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .on_window_event(|window, event| {
+            // Closing the main window must also tear down the hidden "controls"
+            // overlay, otherwise it keeps the process alive with no visible UI.
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if window.label() == "main" {
+                    if let Some(c) = window.app_handle().get_webview_window("controls") {
+                        let _ = c.close();
+                    }
+                }
+            }
+        })
         .manage(MpvState::default())
         .invoke_handler(tauri::generate_handler![
             get_config,
